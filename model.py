@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from database import fetch_todays_races, supabase
 
 
@@ -10,19 +10,20 @@ def calculate_implied_probability(odds: float) -> float:
 
 
 def evaluate_value_bets(race_date: str):
-    """Evaluates today's runners to find positive Expected Value (EV) betting opportunities."""
+    """Evaluates runners for a given date to find positive Expected Value (EV) betting opportunities."""
     print(f"Running value-bet model for date: {race_date}...")
 
     races = fetch_todays_races(race_date)
     if not races:
-        print("No races found in the database for this date.")
+        print(f"No races found in the database for date: {race_date}.")
         return []
 
     value_bets = []
 
     for race in races:
         race_id = race["id"]
-        venue_name = race.get("venues", {}).get("venue_name", "Unknown Venue")
+        # Fallback handling for venue name depending on database response structure
+        venue_name = race.get("venue_name") or race.get("venues", {}).get("venue_name", "Unknown Venue")
         race_time = race["race_time"]
 
         # Fetch all runners for this race
@@ -47,15 +48,14 @@ def evaluate_value_bets(race_date: str):
 
             # Foundational Heuristic Model Probability:
             # Adjusts theoretical probability using official rating relative to a baseline field rating of 80.
-            # (Note: This serves as your baseline calculation to be tuned with historical form data over time).
             rating_factor = official_rating / 80.0
             model_prob = round(min(max(implied_prob * rating_factor * 0.95, 0.01), 0.99), 4)
 
             # Expected Value (EV) calculation for a single bet: (Model Probability * Decimal Odds) - 1
             expected_value = round((model_prob * morning_odds) - 1.0, 4)
 
-            # Flag as a value bet if expected value is positive
-            if expected_value > 0.05:  # 5% value threshold margin
+            # Flag as a value bet if expected value is positive (> 5% value threshold margin)
+            if expected_value > 0.05:
                 value_bets.append({
                     "venue": venue_name,
                     "time": race_time,
@@ -71,8 +71,10 @@ def evaluate_value_bets(race_date: str):
 
 
 if __name__ == "__main__":
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    opportunities = evaluate_value_bets(today_str)
+    # Automatically target tomorrow's date since today's racing has concluded
+    tomorrow_str = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+    
+    opportunities = evaluate_value_bets(tomorrow_str)
     for bet in opportunities:
         print(
             f"[{bet['time']}] {bet['venue']} - {bet['horse']} "
