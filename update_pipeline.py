@@ -30,7 +30,7 @@ def run_pipeline():
 
     days_to_fetch = ["today", "tomorrow"]
     total_races_ingested = 0
-    dataSource_logged = False
+    total_runners_ingested = 0
 
     for day_param in days_to_fetch:
         querystring = {"day": day_param}
@@ -59,12 +59,12 @@ def run_pipeline():
                 class_run = str(race.get("class", "Class N/A"))
                 going = race.get("going", "Unknown")
 
-                # Venue upsert
+                # 1. Upsert Venue
                 venue_data = {"venue_name": course_name, "surface_type": going}
                 venue_res = supabase.table("venues").upsert(venue_data, on_conflict="venue_name").select("id").execute()
                 venue_id = venue_res.data[0].get("id") if venue_res.data else None
 
-                # Race insert
+                # 2. Insert Race
                 race_payload = {
                     "venue_id": venue_id,
                     "course_name": course_name,
@@ -78,48 +78,29 @@ def run_pipeline():
                 race_id = race_res.data[0].get("id") if race_res.data else None
                 total_races_ingested += 1
                 
-                runners = race.get("runners", [])
-                
-                # DEBUG: Print the raw keys of the first runner so we can see its exact schema
-                if not dataSource_logged and runners:
-                    print("--- RAW RUNNER KEYS INSPECTION ---")
-                    print(list(runners[0].keys()))
-                    print("--- RAW RUNNER SAMPLE OBJECT ---")
-                    print(runners[0])
-                    print("----------------------------------")
-                    dataSource_logged = True
-
-                for runner in runners:
-                    # Temporary catch-all extraction based on inspection output
-                    # We will map this perfectly once the logs print the exact schema
-                    horse_name = (
-                        runner.get("horse") or 
-                        runner.get("horse_name") or 
-                        runner.get("name") or 
-                        runner.get("runner_name") or
-                        str(runner.get("horse", {})) or
-                        "Unknown Horse"
-                    )
-                    
-                    # If horse_name is a dict from the API, pull its name field if present
-                    if isinstance(horse_name, dict):
-                        horse_name = horse_name.get("name") or horse_name.get("horse") or "Unknown Horse"
+                # 3. Insert Runners using verified exact keys from logs
+                for runner in race.get("runners", []):
+                    horse_name = runner.get("horse") or "Unknown Horse"
+                    trainer_name = runner.get("trainer") or "Unknown"
+                    jockey_name = runner.get("jockey") or "Unknown"
+                    form_str = str(runner.get("form", ""))
 
                     runner_payload = {
                         "race_id": race_id,
-                        "horse_name": str(horse_name),
-                        "trainer": str(runner.get("trainer", "Unknown")),
-                        "jockey": str(runner.get("jockey", "Unknown")),
-                        "form": str(runner.get("form", "")),
+                        "horse_name": horse_name,
+                        "trainer": trainer_name,
+                        "jockey": jockey_name,
+                        "form": form_str,
                         "age": safe_int(runner.get("age")),
                         "official_rating": safe_int(runner.get("ofr")),
                     }
                     supabase.table("runners").insert(runner_payload).execute()
+                    total_runners_ingested += 1
 
         except Exception as e:
             print(f"Exception encountered while fetching {day_param}: {e}")
 
-    print(f"Pipeline execution completed. Total races ingested: {total_races_ingested}.")
+    print(f"Pipeline execution completed. Total ingested: {total_races_ingested} races and {total_runners_ingested} runners.")
 
 if __name__ == "__main__":
     run_pipeline()
