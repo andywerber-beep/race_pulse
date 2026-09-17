@@ -48,18 +48,17 @@ def run_pipeline():
             class_run = str(race.get("class", "Class N/A"))
             going = race.get("going", "Unknown")
 
-            # 1. Insert Venue
+            # 1. Upsert Venue and retrieve its generated ID
             venue_data = {
                 "venue_name": course_name,
                 "surface_type": going
             }
-            try:
-                supabase.table("venues").upsert(venue_data, on_conflict="venue_name").execute()
-            except Exception as e:
-                print(f"Venue insert warning: {e}")
+            venue_res = supabase.table("venues").upsert(venue_data, on_conflict="venue_name").select("id").execute()
+            venue_id = venue_res.data[0].get("id") if venue_res.data else None
 
-            # 2. Insert Race (including race_time to satisfy database constraint)
+            # 2. Insert Race and retrieve its generated ID
             race_payload = {
+                "venue_id": venue_id,
                 "course_name": course_name,
                 "race_date": race_date,
                 "off_time": off_time,
@@ -68,11 +67,13 @@ def run_pipeline():
                 "class_run": class_run
             }
             
-            supabase.table("races").insert(race_payload).execute()
+            race_res = supabase.table("races").insert(race_payload).select("id").execute()
+            race_id = race_res.data[0].get("id") if race_res.data else None
             
-            # 3. Insert Runners for this race
+            # 3. Insert Runners linked to this race's ID
             for runner in race.get("runners", []):
                 runner_payload = {
+                    "race_id": race_id,
                     "horse_name": runner.get("horse_name", "Unknown Horse"),
                     "trainer": runner.get("trainer", "Unknown"),
                     "jockey": runner.get("jockey", "Unknown"),
