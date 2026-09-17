@@ -9,6 +9,15 @@ load_dotenv()
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
 API_HOST = "the-racing-api1.p.rapidapi.com"
 
+def safe_int(value):
+    """Safely convert API values like '-' or empty strings to None for integer columns."""
+    if value is None or value == "" or value == "-":
+        return None
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return None
+
 def run_pipeline():
     """Fetches upcoming racecards and automatically populates Supabase tables."""
     if not RAPIDAPI_KEY:
@@ -70,16 +79,16 @@ def run_pipeline():
             race_res = supabase.table("races").insert(race_payload).select("id").execute()
             race_id = race_res.data[0].get("id") if race_res.data else None
             
-            # 3. Insert Runners linked to this race's ID
+            # 3. Insert Runners linked to this race's ID (with safe integer parsing)
             for runner in race.get("runners", []):
                 runner_payload = {
                     "race_id": race_id,
                     "horse_name": runner.get("horse_name", "Unknown Horse"),
                     "trainer": runner.get("trainer", "Unknown"),
                     "jockey": runner.get("jockey", "Unknown"),
-                    "form": runner.get("form", ""),
-                    "age": runner.get("age"),
-                    "official_rating": runner.get("ofr"),
+                    "form": str(runner.get("form", "")),
+                    "age": safe_int(runner.get("age")),
+                    "official_rating": safe_int(runner.get("ofr")),
                 }
                 supabase.table("runners").insert(runner_payload).execute()
                 total_runners += 1
