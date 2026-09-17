@@ -16,7 +16,7 @@ def run_pipeline():
         return
 
     url = f"https://{API_HOST}/v1/racecards/free"
-    querystring = {"day": "today", "region_codes": "gb,ire"}
+    querystring = {"day": "today"}
     
     headers = {
         "x-rapidapi-key": RAPIDAPI_KEY,
