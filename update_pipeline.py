@@ -31,8 +31,6 @@ def run_pipeline():
             return
 
         data = response.json()
-        print(f"API Response Debug: {str(data)[:200]}...")
-
         races = data if isinstance(data, list) else data.get("racecards", [])
         
         if not races:
@@ -48,15 +46,19 @@ def run_pipeline():
             off_time = race.get("off_time", "00:00")
             race_name = race.get("race_name", "Standard Race")
             class_run = str(race.get("class", "Class N/A"))
+            going = race.get("going", "Unknown")
 
-            # Insert Venue if needed
-            venue_data = {"venue_name": course_name}
+            # 1. Insert Venue
+            venue_data = {
+                "venue_name": course_name,
+                "surface_type": going  # Map going or default surface
+            }
             try:
                 supabase.table("venues").upsert(venue_data, on_conflict="venue_name").execute()
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"Venue insert warning: {e}")
 
-            # Insert Race
+            # 2. Insert Race
             race_payload = {
                 "course_name": course_name,
                 "race_date": race_date,
@@ -65,9 +67,9 @@ def run_pipeline():
                 "class_run": class_run
             }
             
-            supabase.table("races").insert(race_payload).execute()
+            race_res = supabase.table("races").insert(race_payload).execute()
             
-            # Insert Runners for this race
+            # 3. Insert Runners for this race
             for runner in race.get("runners", []):
                 runner_payload = {
                     "horse_name": runner.get("horse_name", "Unknown Horse"),
