@@ -51,23 +51,24 @@ def run_pipeline():
             # 1. Insert Venue
             venue_data = {
                 "venue_name": course_name,
-                "surface_type": going  # Map going or default surface
+                "surface_type": going
             }
             try:
                 supabase.table("venues").upsert(venue_data, on_conflict="venue_name").execute()
             except Exception as e:
                 print(f"Venue insert warning: {e}")
 
-            # 2. Insert Race
+            # 2. Insert Race (including race_time to satisfy database constraint)
             race_payload = {
                 "course_name": course_name,
                 "race_date": race_date,
                 "off_time": off_time,
+                "race_time": off_time,
                 "race_name": race_name,
                 "class_run": class_run
             }
             
-            race_res = supabase.table("races").insert(race_payload).execute()
+            supabase.table("races").insert(race_payload).execute()
             
             # 3. Insert Runners for this race
             for runner in race.get("runners", []):
