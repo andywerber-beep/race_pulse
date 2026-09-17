@@ -18,6 +18,14 @@ def safe_int(value):
     except (ValueError, TypeError):
         return None
 
+def extract_name(field):
+    """Extracts a string name safely whether the field is a string or a nested dictionary."""
+    if isinstance(field, dict):
+        return field.get("name") or field.get("horse") or field.get("runner") or "Unknown"
+    if isinstance(field, str) and field.strip():
+        return field.strip()
+    return "Unknown"
+
 def run_pipeline():
     """Fetches racecards for today and tomorrow using the free endpoint and populates Supabase."""
     if not RAPIDAPI_KEY:
@@ -30,7 +38,6 @@ def run_pipeline():
         "x-rapidapi-host": API_HOST
     }
 
-    # Fetch both today and tomorrow to capture upcoming runners and riders
     days_to_fetch = ["today", "tomorrow"]
     total_races_ingested = 0
     total_runners_ingested = 0
@@ -85,21 +92,27 @@ def run_pipeline():
                 race_id = race_res.data[0].get("id") if race_res.data else None
                 total_races_ingested += 1
                 
-                # 3. Insert Runners linked to this race's ID with defensive fallback for horse names
+                # 3. Insert Runners linked to this race's ID with robust nested extraction
                 for runner in race.get("runners", []):
-                    horse_name = (
+                    # Check multiple potential keys and nested structures for the horse name
+                    raw_horse = (
                         runner.get("horse") or 
                         runner.get("name") or 
                         runner.get("horse_name") or 
-                        runner.get("runner") or 
-                        "Unknown Horse"
+                        runner.get("runner")
                     )
+                    horse_name = extract_name(raw_horse)
+                    if horse_name == "Unknown":
+                        horse_name = "Unknown Horse"
+
+                    trainer_name = extract_name(runner.get("trainer"))
+                    jockey_name = extract_name(runner.get("jockey"))
 
                     runner_payload = {
                         "race_id": race_id,
                         "horse_name": horse_name,
-                        "trainer": runner.get("trainer", "Unknown"),
-                        "jockey": runner.get("jockey", "Unknown"),
+                        "trainer": trainer_name,
+                        "jockey": jockey_name,
                         "form": str(runner.get("form", "")),
                         "age": safe_int(runner.get("age")),
                         "official_rating": safe_int(runner.get("ofr")),
