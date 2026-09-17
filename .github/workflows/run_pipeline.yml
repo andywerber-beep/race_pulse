@@ -2,8 +2,8 @@ name: Daily Race Pulse Pipeline
 
 on:
   schedule:
-    - cron: '0 7 * * *' # Runs every day at 07:00 UTC
-  workflow_dispatch: # Allows you to run it manually from the GitHub Actions tab
+    - cron: '0 7 * * *'
+  workflow_dispatch:
 
 jobs:
   run-pipeline:
@@ -23,10 +23,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Scraper and Value Model
+      - name: Run Pipeline
         env:
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          python scraper.py
-          python model.py
+          python update_pipeline.py
