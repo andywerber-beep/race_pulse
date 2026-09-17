@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 import requests
 from dotenv import load_dotenv
 from database import supabase
@@ -19,49 +19,44 @@ def safe_int(value):
         return None
 
 def run_pipeline():
-    """Fetches upcoming racecards across a rolling 7-day window and automatically populates Supabase tables."""
+    """Fetches racecards for today and tomorrow using the free endpoint and populates Supabase."""
     if not RAPIDAPI_KEY:
         print("Error: RAPIDAPI_KEY not found in environment variables.")
         return
 
-    url = f"https://{API_HOST}/v1/racecards"
-    
+    url = f"https://{API_HOST}/v1/racecards/free"
     headers = {
         "x-rapidapi-key": RAPIDAPI_KEY,
         "x-rapidapi-host": API_HOST
     }
 
-    # Generate a rolling 7-day window starting from today
-    today = datetime.today()
-    date_window = [(today + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
-    
+    # Fetch both today and tomorrow to capture upcoming runners and riders
+    days_to_fetch = ["today", "tomorrow"]
     total_races_ingested = 0
     total_runners_ingested = 0
 
-    print(f"Starting rolling 7-day pipeline fetch for dates: {date_window[0]} to {date_window[-1]}...")
-
-    for target_date in date_window:
-        querystring = {"date": target_date}
-        print(f"Fetching racecards for date: {target_date}...")
+    for day_param in days_to_fetch:
+        querystring = {"day": day_param}
+        print(f"Fetching racecards for '{day_param}'...")
         
         try:
             response = requests.get(url, headers=headers, params=querystring)
-            
-            # If the free tier blocks specific future dates, log it gracefully and continue
             if response.status_code != 200:
-                print(f"Notice for {target_date}: API returned status {response.status_code} - {response.text}")
+                print(f"API Error for {day_param}: {response.status_code} - {response.text}")
                 continue
 
             data = response.json()
             races = data if isinstance(data, list) else data.get("racecards", [])
             
             if not races:
-                print(f"No racecards found for {target_date}.")
+                print(f"No racecards found for {day_param}.")
                 continue
 
+            today_str = datetime.today().strftime('%Y-%m-%d')
+            
             for race in races:
                 course_name = race.get("course", "Unknown Course")
-                race_date = race.get("date", target_date)
+                race_date = race.get("date", today_str)
                 off_time = race.get("off_time", "00:00")
                 race_name = race.get("race_name", "Standard Race")
                 class_run = str(race.get("class", "Class N/A"))
@@ -113,9 +108,9 @@ def run_pipeline():
                     total_runners_ingested += 1
 
         except Exception as e:
-            print(f"Exception encountered while fetching {target_date}: {e}")
+            print(f"Exception encountered while fetching {day_param}: {e}")
 
-    print(f"Pipeline execution completed. Total ingested: {total_races_ingested} races and {total_runners_ingested} runners across the window.")
+    print(f"Pipeline execution completed. Total ingested: {total_races_ingested} races and {total_runners_ingested} runners.")
 
 if __name__ == "__main__":
     run_pipeline()
