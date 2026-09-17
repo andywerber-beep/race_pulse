@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import requests
 from dotenv import load_dotenv
 from database import supabase
@@ -30,26 +31,30 @@ def run_pipeline():
             return
 
         data = response.json()
+        print(f"API Response Debug: {str(data)[:200]}...")
+
         races = data if isinstance(data, list) else data.get("racecards", [])
         
         if not races:
             print("No racecards found for ingestion.")
             return
 
+        today_str = datetime.today().strftime('%Y-%m-%d')
         total_runners = 0
+        
         for race in races:
             course_name = race.get("course", "Unknown Course")
-            race_date = race.get("date", "2026-09-17")
+            race_date = race.get("date", today_str)
             off_time = race.get("off_time", "00:00")
             race_name = race.get("race_name", "Standard Race")
             class_run = str(race.get("class", "Class N/A"))
 
-            # Insert Venue if needed or log course
+            # Insert Venue if needed
             venue_data = {"venue_name": course_name}
             try:
                 supabase.table("venues").upsert(venue_data, on_conflict="venue_name").execute()
             except Exception:
-                pass # Fallback if constraint differs
+                pass
 
             # Insert Race
             race_payload = {
@@ -60,7 +65,7 @@ def run_pipeline():
                 "class_run": class_run
             }
             
-            race_res = supabase.table("races").insert(race_payload).execute()
+            supabase.table("races").insert(race_payload).execute()
             
             # Insert Runners for this race
             for runner in race.get("runners", []):
