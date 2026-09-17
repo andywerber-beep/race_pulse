@@ -79,11 +79,12 @@ def run_pipeline():
             race_res = supabase.table("races").insert(race_payload).select("id").execute()
             race_id = race_res.data[0].get("id") if race_res.data else None
             
-            # 3. Insert Runners linked to this race's ID (with safe integer parsing)
+            # 3. Insert Runners linked to this race's ID (using correct 'horse' key)
             for runner in race.get("runners", []):
+                horse_name = runner.get("horse") or runner.get("horse_name") or "Unknown Horse"
                 runner_payload = {
                     "race_id": race_id,
-                    "horse_name": runner.get("horse_name", "Unknown Horse"),
+                    "horse_name": horse_name,
                     "trainer": runner.get("trainer", "Unknown"),
                     "jockey": runner.get("jockey", "Unknown"),
                     "form": str(runner.get("form", "")),
