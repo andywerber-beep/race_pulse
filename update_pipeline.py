@@ -88,7 +88,7 @@ def run_pipeline():
                 race_id = race_res.data[0].get("id")
                 total_races_ingested += 1
                 
-                # 3. Insert Runners
+                # 3. Insert Runners with mapped missing columns
                 for runner in race.get("runners", []):
                     horse_name = runner.get("horse") or "Unknown Horse"
                     trainer_name = runner.get("trainer") or "Unknown"
@@ -103,6 +103,9 @@ def run_pipeline():
                         "form": form_str,
                         "age": safe_int(runner.get("age")),
                         "official_rating": safe_int(runner.get("ofr")),
+                        "weight_carried_lbs": safe_int(runner.get("lbs")),
+                        "days_since_last_run": safe_int(runner.get("last_run")),
+                        "equipment": runner.get("headgear") or None,
                     }
                     
                     supabase.table("runners").insert(runner_payload).execute()
